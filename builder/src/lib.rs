@@ -17,22 +17,22 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let builder_ident = format_ident!("{ident}Builder");
 
     let field_names = named.iter().map(|field| {
-        let nident = field.ident.to_owned();
-        quote! { #nident }
+        let fident = &field.ident;
+        quote! { #fident }
     });
 
     let option_fields = named.iter().map(|field| {
-        let nident = field.ident.to_owned();
-        let nty = field.ty.to_owned();
-        quote! { #nident: Option<#nty> }
+        let fident = &field.ident;
+        let fty = &field.ty;
+        quote! { #fident: Option<#fty> }
     });
 
     let builder_fn_impl = named.iter().map(|field| {
-        let nident = field.ident.to_owned();
-        let nty = field.ty.to_owned();
+        let fident = field.ident.to_owned();
+        let fty = field.ty.to_owned();
         quote! {
-            fn #nident(&mut self, #nident: #nty) -> &mut Self {
-                self.#nident = Some(#nident);
+            fn #fident(&mut self, #fident: #fty) -> &mut Self {
+                self.#fident = Some(#fident);
                 self
             }
         }
@@ -42,7 +42,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let fident = field.ident.to_owned();
         quote! {
             // TODO: Error handling
-            #fident: self.#fident.clone().unwrap()
+            #fident: self.#fident.take().ok_or_else(|| format!("missing field: {}", stringify!(#fident)))?
         }
     });
 
