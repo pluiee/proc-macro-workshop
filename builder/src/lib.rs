@@ -1,3 +1,5 @@
+mod utils;
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput};
@@ -24,12 +26,25 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let option_fields = named.iter().map(|field| {
         let fident = &field.ident;
         let fty = &field.ty;
+        if utils::unwrap_option(fty).is_some() {
+            return quote! { #fident: #fty };
+        }
         quote! { #fident: Option<#fty> }
     });
 
     let builder_fn_impl = named.iter().map(|field| {
         let fident = field.ident.to_owned();
         let fty = field.ty.to_owned();
+
+        if let Some(ufty) = utils::unwrap_option(&fty) {
+            return quote! {
+                fn #fident(&mut self, #fident: #ufty) -> &mut Self {
+                    self.#fident = Some(#fident);
+                    self
+                }
+            };
+        }
+
         quote! {
             fn #fident(&mut self, #fident: #fty) -> &mut Self {
                 self.#fident = Some(#fident);
@@ -39,9 +54,16 @@ pub fn derive(input: TokenStream) -> TokenStream {
     });
 
     let unwrap_impl = named.iter().map(|field| {
+        let fty = &field.ty;
         let fident = field.ident.to_owned();
+
+        if utils::unwrap_option(fty).is_some() {
+            return quote! {
+                #fident: self.#fident.to_owned()
+            }
+        }
+
         quote! {
-            // TODO: Error handling
             #fident: self.#fident.take().ok_or_else(|| format!("missing field: {}", stringify!(#fident)))?
         }
     });
