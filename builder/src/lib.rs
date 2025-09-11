@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput};
 
-#[proc_macro_derive(Builder)]
+#[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let DeriveInput { ident, data, .. } = parse_macro_input!(input);
 
@@ -17,11 +17,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
     };
 
     let builder_ident = format_ident!("{ident}Builder");
-
-    let field_names = named.iter().map(|field| {
-        let fident = &field.ident;
-        quote! { #fident }
-    });
 
     let option_fields = named.iter().map(|field| {
         let fident = &field.ident;
@@ -69,6 +64,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     });
 
     let tokens = quote! {
+        #[derive(Default)]
         pub struct #builder_ident {
             #(#option_fields),*
         }
@@ -80,7 +76,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         impl #ident {
             pub fn builder() -> #builder_ident {
                 #builder_ident {
-                    #(#field_names: None),*
+                    ..Default::default()
                 }
             }
         }
