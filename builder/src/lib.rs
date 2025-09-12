@@ -33,7 +33,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         if utils::unwrap_vector(fty).is_some() && each_key.is_some() {
             return Ok(quote! { #fident: #fty });
         }
-        Ok(quote! { #fident: Option<#fty> })
+        Ok(quote! { #fident: std::option::Option<#fty> })
     });
 
     let builder_fn_impl = named.iter().map(|field| {
@@ -141,7 +141,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
 
         impl #builder_ident {
-            pub fn build(&mut self) -> Result<#ident, String> {
+            pub fn build(&mut self) -> std::result::Result<#ident, String> {
                 Ok(#ident {
                     #(#unwrap_impl),*
                 })
