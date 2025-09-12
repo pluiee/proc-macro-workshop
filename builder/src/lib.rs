@@ -24,6 +24,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
         if utils::unwrap_option(fty).is_some() {
             return quote! { #fident: #fty };
         }
+        if utils::unwrap_vector(fty).is_some() && utils::unwrap_vec_key(&field.attrs).is_some() {
+            return quote! { #fident: #fty };
+        }
         quote! { #fident: Option<#fty> }
     });
 
@@ -31,36 +34,13 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let fident = field.ident.to_owned();
         let fty = field.ty.to_owned();
 
-        let fattrs = &field.attrs;
-
-        let mut each_key: Option<syn::Ident> = None;
-
-        for attr in fattrs {
-            if !attr.path().is_ident("builder") {
-                continue;
-            }
-            let _ = attr.parse_nested_meta(|meta| {
-                if !meta.path.is_ident("each") {
-                    return Err(meta.error("unmatched meta ident"));
-                }
-                let key = meta.value()?.parse::<syn::LitStr>()?;
-                each_key = Some(format_ident!("{}", key.value()));
-                Ok(())
-            });
-        }
+        let each_key = utils::unwrap_vec_key(&field.attrs);
 
         if let Some(each_key) = each_key {
             if let Some(ufty) = utils::unwrap_vector(&fty) {
                 return quote! {
                     fn #each_key(&mut self, #each_key: #ufty) -> &mut Self {
-                        match self.#fident.as_mut() {
-                            None => {
-                                self.#fident = Some(vec![#each_key]);
-                            }
-                            Some(v) => {
-                                v.push(#each_key);
-                            }
-                        }
+                        self.#fident.push(#each_key);
                         self
                     }
                 };
@@ -89,6 +69,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let fident = field.ident.to_owned();
 
         if utils::unwrap_option(fty).is_some() {
+            return quote! {
+                #fident: self.#fident.to_owned()
+            }
+        }
+
+        if utils::unwrap_vector(fty).is_some() && utils::unwrap_vec_key(&field.attrs).is_some() {
             return quote! {
                 #fident: self.#fident.to_owned()
             }
