@@ -31,6 +31,42 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let fident = field.ident.to_owned();
         let fty = field.ty.to_owned();
 
+        let fattrs = &field.attrs;
+
+        let mut each_key: Option<syn::Ident> = None;
+
+        for attr in fattrs {
+            if !attr.path().is_ident("builder") {
+                continue;
+            }
+            let _ = attr.parse_nested_meta(|meta| {
+                if !meta.path.is_ident("each") {
+                    return Err(meta.error("unmatched meta ident"));
+                }
+                let key = meta.value()?.parse::<syn::LitStr>()?;
+                each_key = Some(format_ident!("{}", key.value()));
+                Ok(())
+            });
+        }
+
+        if let Some(each_key) = each_key {
+            if let Some(ufty) = utils::unwrap_vector(&fty) {
+                return quote! {
+                    fn #each_key(&mut self, #each_key: #ufty) -> &mut Self {
+                        match self.#fident.as_mut() {
+                            None => {
+                                self.#fident = Some(vec![#each_key]);
+                            }
+                            Some(v) => {
+                                v.push(#each_key);
+                            }
+                        }
+                        self
+                    }
+                };
+            }
+        }
+
         if let Some(ufty) = utils::unwrap_option(&fty) {
             return quote! {
                 fn #fident(&mut self, #fident: #ufty) -> &mut Self {
