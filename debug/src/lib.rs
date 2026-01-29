@@ -1,6 +1,10 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, parse_quote, GenericParam, Generics, Meta};
+use std::collections::HashMap;
+use syn::{
+    parse_macro_input, parse_quote, punctuated::Punctuated, token::Comma, Field, GenericArgument,
+    GenericParam, Generics, Meta,
+};
 
 #[proc_macro_derive(CustomDebug, attributes(debug))]
 pub fn derive(input: TokenStream) -> TokenStream {
@@ -19,7 +23,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         unimplemented!()
     };
 
-    let generics = add_debug_bounds(generics);
+    let generics = add_debug_bounds(generics, &fields);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let field_impl = fields.iter().map(|field| {
@@ -55,11 +59,47 @@ pub fn derive(input: TokenStream) -> TokenStream {
     .into()
 }
 
-fn add_debug_bounds(mut generics: Generics) -> Generics {
+fn add_debug_bounds(mut generics: Generics, fields: &Punctuated<Field, Comma>) -> Generics {
+    let mut generic_map = HashMap::<syn::Ident, (bool, u8)>::new();
+
+    fields.iter().for_each(|field| {
+        if let syn::Type::Path(path) = &field.ty {
+            let segment = path.path.segments.last().unwrap();
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                args.args.iter().for_each(|arg| {
+                    if let GenericArgument::Type(ty) = arg {
+                        let ident = match ty {
+                            syn::Type::Path(path) => {
+                                path.path.segments.first().unwrap().ident.to_owned()
+                            }
+                            _ => unimplemented!(),
+                        };
+                        let val = generic_map.get(&ident);
+                        match val {
+                            Some((in_phantom, count)) => {
+                                let in_phantom =
+                                    in_phantom.to_owned() || (segment.ident == "PhantomData");
+                                generic_map.insert(ident, (in_phantom, count + 1));
+                            }
+                            None => {
+                                generic_map.insert(ident, (segment.ident == "PhantomData", 1));
+                            }
+                        }
+                    }
+                })
+            }
+        }
+    });
+
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
+            let ident = type_param.ident.to_owned();
+            if let Some((true, 1)) = generic_map.get(&ident) {
+                continue;
+            }
             type_param.bounds.push(parse_quote!(std::fmt::Debug));
         }
     }
+
     generics
 }
